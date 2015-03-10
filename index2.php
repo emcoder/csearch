@@ -3,11 +3,15 @@
 	
 	if ($mysqli_gugel->connect_errno){
 		echo "Failed to connect to MySQL: (" . $mysqli_gugel->connect_errno . ") " . $mysqli_gugel->connect_error;
-	}else{
-		//echo "yay";
 	}
+	
 	$searchtext = $_GET['searchtext'];
 	$keywords = preg_split("/[\s\.]+/", $searchtext);
+
+	if(isset($_GET['id'])){
+		$id_plus = $_GET['id'];
+		$update_priority_query1 = $mysqli_gugel->query("UPDATE course SET priority = priority + 0.01 WHERE id = ".$id_plus); 
+	}
 
 	//create temp table for scores
 	$create_temp_table_query1 = $mysqli_gugel->query("CREATE TEMPORARY TABLE tablescores1 (
@@ -36,7 +40,7 @@
 			// loop for updating score in temp table
 			// if id not found in temp table, insert it. else plus 1 to score
 			for($bb = 0;$bb<$total_mq2;$bb++){
-				$count_query1 = $mysqli_gugel->query("SELECT * FROM tablescores1 WHERE temp_id = ".$row_mq2[$bb][0]);
+				$count_query1 = $mysqli_gugel->query("SELECT * FROM tablescores1 WHERE temp_id = ".$row_mq2[$bb][0]); 
 				$total_cq1 = $count_query1->num_rows;
 				
 				if($total_cq1 > 0){
@@ -73,17 +77,31 @@
 					$total_lq1 = $like_query1->num_rows;
 					
 					if($total_lq1 > 0){
-						$update_query2 = $mysqli_gugel->query("UPDATE tablescores1 SET temp_score = temp_score + 0.1 WHERE temp_id = ".$row[$j][0]);
+						$update_query2 = $mysqli_gugel->query("UPDATE tablescores1 SET temp_score = temp_score + ".$addme." WHERE temp_id = ".$row[$j][0]);
 					}
 				}
 			}
 		}
 	}
+
+	$match_query3 = $mysqli_gugel->query("SELECT * FROM course c JOIN tablescores1 ts1 ON c.id = ts1.temp_id WHERE match(c.coursedesc) against ('$searchtext')");
+	$total_mq3 = $match_query3->num_rows;
+
+	if($total_mq3 > 0){
+		$row = $match_query3->fetch_all();
+
+		for($ii = 0;$ii<$total_mq3;$ii++){
+			$newTotal= (float)$row[$ii][5]+(float)$row[$ii][7];
+			$update_score_query1 = $mysqli_gugel->query("UPDATE tablescores1 SET temp_score = ".$newTotal." WHERE temp_id = ".$row[$ii][0]);
+		}
+	}
+
 	$order_query1 = $mysqli_gugel->query("SELECT * 
 											FROM course c 
 												JOIN tablescores1 ts1 
-												ON c.id = ts1.temp_id
-											ORDER BY ts1.temp_score DESC LIMIT 10");
+												ON c.id = ts1.temp_id WHERE ts1.temp_score>0
+											ORDER BY ts1.temp_score DESC");
+	
 	$total = $order_query1->num_rows;
 
 
@@ -137,19 +155,14 @@
 		for($i=0;$i<$total_algo2;$i++){
 			$insert_query2 = $mysqli_gugel->query("INSERT INTO tablescores2 (temp_id,temp_score) 
 																VALUES (".$row_algo2[$i][0].",". $finalscore[$i].")");
-			//$query5 = $mysqli_gugel->query("UPDATE course SET score2 = ". $finalscore[$i] ." WHERE id = ".$row[$i][0]); //update score for second algo in database
 		}
-			
-			//$query2_algo2 = $mysqli_gugel->query("SELECT * FROM tablescores2 where score2 != 0.0 ORDER BY score2 DESC");
-			//$total_algo2 = $query2_algo2->num_rows;
-
 	}
 
 	$order_query2 = $mysqli_gugel->query("SELECT * 
 											FROM course c 
 												JOIN tablescores2 ts2 
-												ON c.id = ts2.temp_id
-											ORDER BY ts2.temp_score DESC LIMIT 10");
+												ON c.id = ts2.temp_id WHERE ts2.temp_score>0
+											ORDER BY ts2.temp_score DESC");
 	$total_algo2 = $order_query2->num_rows;
 ?>
 
@@ -215,12 +228,13 @@
 						$rank = $i + 1;
 						echo "<tr>
 								<td width='89%' class='pbm' >
-									<h5>".$row[$i][1]."</h5>
+									<h5><a href='index2.php?searchtext=".$searchtext."&id=".$row[$i][0]."'>".$row[$i][1]."</a> (".$row[$i][4].".0 units)</h5>
+									<h6>".$row[$i][2]."</h6>
 									<small>".$row[$i][3]."</small>
 								</td>
 							<td class='pbm'>
 								<dl class='palette palette-sun-flower'>
-									<dt> <span class='fui-star-2'></span> ".$row[$i][6]." pts</dt>
+									<dt> <span class='fui-star-2'></span> ".$row[$i][7]."</dt>
 								</dl>
 							</td>
 						</tr>";
@@ -244,12 +258,13 @@
 							
 							echo "<tr>
 									<td width='89%' class='pbm'>
-										<a href='#'><h5>".$row_algo2[$i][1]."</h5></a>
+										<h5><a href='index2.php?searchtext=".$searchtext."&id=".$row_algo2[$i][0]."'>".$row_algo2[$i][1]."</a> (".$row_algo2[$i][4].".0 units)</h5>
+										<h6>".$row_algo2[$i][2]."</h6>
 										<small>".$row_algo2[$i][3]."</small>
 									</td>
 									<td class='pbm'>
 										<dl class='palette palette-sun-flower'>
-										<dt> <div class='score'><center><span class='fui-star-2'></span> ".$row_algo2[$i][6]."</center></div></dt>
+										<dt> <div class='score'><center><span class='fui-star-2'></span> ".$row_algo2[$i][7]."</center></div></dt>
 										</dl>
 									</td>
 								</tr>
@@ -274,12 +289,13 @@
 							$rank = $i + 1;
 							echo "<tr>
 									<td width='89%' class='pbm' >
-										<h5>".$row[$i][1]."</h5>
+										<h5><a href='index2.php?searchtext=".$searchtext."&id=".$row[$i][0]."'>".$row[$i][1]."</a> (".$row[$i][4].".0 units)</h5>
+										<h6>".$row[$i][2]."</h6>
 										<small>".$row[$i][3]."</small>
 									</td>
 								<td class='pbm'>
 									<dl class='palette palette-sun-flower'>
-										<dt> <span class='fui-star-2'></span> ".$row[$i][6]." pts</dt>
+										<dt> <div class='score'><center><span class='fui-star-2'></span> ".$row[$i][7]."</center></div></dt>
 									</dl>
 								</td>
 							</tr>";
@@ -297,15 +313,19 @@
 						{
 							
 							for($i = 0;$i<$total_algo2;$i++){
+								$desc2 = $row_algo2[$i][3];
+								$search_array=preg_split("/[\s\.]+/", $search_word);
+								$countLen=count($search_array);
 								
 								echo "<tr>
 										<td width='89%' class='pbm'>
-											<a href='#'><h5>".$row_algo2[$i][1]."</h5></a>
-											<small>".$row_algo2[$i][3]."</small>
+											<h5><a href='index2.php?searchtext=".$searchtext."&id=".$row_algo2[$i][0]."'>".$row_algo2[$i][1]."</a> (".$row_algo2[$i][4].".0 units)</h5>
+											<h6>".$row_algo2[$i][2]."</h6>
+											<small>".$desc2."</small>
 										</td>
 										<td class='pbm'>
 											<dl class='palette palette-sun-flower'>
-											<dt> <div class='score'><center><span class='fui-star-2'></span> ".$row_algo2[$i][6]."</center></div></dt>
+											<dt> <div class='score'><center><span class='fui-star-2'></span> ".$row_algo2[$i][7]."</center></div></dt>
 											</dl>
 										</td>
 									</tr>
@@ -322,22 +342,6 @@
 	          	</table>
 	        </div>
 	    </div>
-	  <center>
-	  <!-- <div class="pagination">
-	    <ul>
-	      <li class="previous"><a href="#fakelink" class="fui-arrow-left"></a></li>
-	      <li class="active"><a href="#fakelink">1</a></li>
-	      <li><a href="#fakelink">2</a></li>
-	      <li><a href="#fakelink">3</a></li>
-	      <li><a href="#fakelink">4</a></li>
-	      <li><a href="#fakelink">5</a></li>
-	      <li><a href="#fakelink">6</a></li>
-	      <li><a href="#fakelink">7</a></li>
-	      <li><a href="#fakelink">8</a></li>
-	      <li class="next"><a href="#fakelink" class="fui-arrow-right"></a></li>
-	    </ul>
-	  </div> --> <!-- /pagination -->
-	  </center>
       </div>
 
     </div> <!-- /container -->
